@@ -4,6 +4,11 @@
 #include <cstdio>
 #include <cstdlib>
 #include <memory>
+#include <iostream>
+#include <fstream>
+
+#include "cereal/archives/json.hpp"
+#include "cereal/cereal.hpp"
 
 #include "common_defs.h"
 #include "FileIO.hpp"
@@ -11,7 +16,7 @@
 
 using namespace uplinkzero;
 
-int CollectPEHeaders()
+int CollectPEHeaders(BYTE * pBuffer)
 {
 	BYTE * pSignatureLocation = pBuffer + 0x3c;
 	BYTE * pPEHeader = pBuffer + *pSignatureLocation;
@@ -35,6 +40,7 @@ int CollectPEHeaders()
 		coff.pNumberOfSymbols = reinterpret_cast<DWORD *>(pCOFFHeader + 12);
 		coff.pSizeOfOptionalHeader = reinterpret_cast<WORD *>(pCOFFHeader + 16);
 		coff.pCharacteristics = reinterpret_cast<WORD *>(pCOFFHeader + 18);
+
 		coff.Machine = *(reinterpret_cast<WORD *>(pCOFFHeader + 0));
 		coff.NumberOfSections = *(reinterpret_cast<WORD *>(pCOFFHeader + 2));
 		coff.TimeDateStamp = *(reinterpret_cast<DWORD *>(pCOFFHeader + 4));
@@ -43,15 +49,22 @@ int CollectPEHeaders()
 		coff.SizeOfOptionalHeader = *(reinterpret_cast<WORD *>(pCOFFHeader + 16));
 		coff.Characteristics = *(reinterpret_cast<WORD *>(pCOFFHeader + 18));
 
-		printf("Machine:              offset: 0x%x value: 0x%x\n", reinterpret_cast<BYTE *>(coff.pMachine) - pBuffer, coff.Machine);
-		printf("NumberOfSections:     offset: 0x%x value: 0x%x\n", reinterpret_cast<BYTE *>(coff.pNumberOfSections) - pBuffer, coff.NumberOfSections);
-		printf("TimeDateStamp:        offset: 0x%x value: 0x%x\n", reinterpret_cast<BYTE *>(coff.pTimeDateStamp) - pBuffer, coff.TimeDateStamp);
-		printf("PointerToSymbolTable: offset: 0x%x value: 0x%x\n", reinterpret_cast<BYTE *>(coff.pPointerToSymbolTable) - pBuffer, coff.PointerToSymbolTable);
-		printf("NumberOfSymbols:      offset: 0x%x value: 0x%x\n", reinterpret_cast<BYTE *>(coff.pNumberOfSymbols) - pBuffer, coff.NumberOfSymbols);
-		printf("SizeOfOptionalHeader: offset: 0x%x value: 0x%x\n", reinterpret_cast<BYTE *>(coff.pSizeOfOptionalHeader) - pBuffer, coff.SizeOfOptionalHeader);
-		printf("Characteristics:      offset: 0x%x value: 0x%x\n", reinterpret_cast<BYTE *>(coff.pCharacteristics) - pBuffer, coff.Characteristics);
+		std::ofstream os("headers.json", std::ios::binary);
+		cereal::JSONOutputArchive archive(os);
+		cereal::JSONOutputArchive archive_cout(std::cout);
+		coff.serialize(archive);
+		coff.serialize(archive_cout);
+
+		//printf("Machine:              offset: 0x%x value: 0x%x\n", reinterpret_cast<BYTE *>(coff.pMachine) - pBuffer, coff.Machine);
+		//printf("NumberOfSections:     offset: 0x%x value: 0x%x\n", reinterpret_cast<BYTE *>(coff.pNumberOfSections) - pBuffer, coff.NumberOfSections);
+		//printf("TimeDateStamp:        offset: 0x%x value: 0x%x\n", reinterpret_cast<BYTE *>(coff.pTimeDateStamp) - pBuffer, coff.TimeDateStamp);
+		//printf("PointerToSymbolTable: offset: 0x%x value: 0x%x\n", reinterpret_cast<BYTE *>(coff.pPointerToSymbolTable) - pBuffer, coff.PointerToSymbolTable);
+		//printf("NumberOfSymbols:      offset: 0x%x value: 0x%x\n", reinterpret_cast<BYTE *>(coff.pNumberOfSymbols) - pBuffer, coff.NumberOfSymbols);
+		//printf("SizeOfOptionalHeader: offset: 0x%x value: 0x%x\n", reinterpret_cast<BYTE *>(coff.pSizeOfOptionalHeader) - pBuffer, coff.SizeOfOptionalHeader);
+		//printf("Characteristics:      offset: 0x%x value: 0x%x\n", reinterpret_cast<BYTE *>(coff.pCharacteristics) - pBuffer, coff.Characteristics);
 
 	}
+	return 0;
 }
 
 int main(int argc, char * argv[])
@@ -64,9 +77,7 @@ int main(int argc, char * argv[])
 	pBuffer[sz + 1] = '\0';
 	fio.ReadBlock(pBuffer, sz);
 
-	const size_t COFF = 0x40;
-	int i = 0;
-
+	CollectPEHeaders(pBuffer);
 	
 	//printf("COFF location: %p = 0x%x\n", coff_location, *coff_location);
 	//printf("Machine: 0x%x\n", reinterpret_cast<WORD>(buf + *coff_location + 4 + 0));

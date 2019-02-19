@@ -17,10 +17,5 @@ typedef QWORD * QWORDptr;
 
 
 
-namespace
-{
-	
-
-}
 
 #endif // !COMMON_DEFS_HPP

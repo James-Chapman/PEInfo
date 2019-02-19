@@ -32,3 +32,5 @@
 *.app
 /PEInfo/PEInfo.vcxproj.user
 /PEInfo/PEInfo.vcxproj.filters
+*.tlog
+.vs

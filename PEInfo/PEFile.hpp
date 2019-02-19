@@ -3,6 +3,9 @@
 #ifndef PEFILE_HPP
 #define PEFILE_HPP
 
+#include "cereal/archives/json.hpp"
+#include "cereal/types/string.hpp"
+#include "cereal/types/map.hpp"
 #include "common_defs.h"
 
 typedef struct _COFF_Header
@@ -21,6 +24,12 @@ typedef struct _COFF_Header
 	DWORD   NumberOfSymbols;
 	WORD    SizeOfOptionalHeader;
 	WORD    Characteristics;
+
+	template <class Archive>
+	void serialize(Archive & ar)
+	{
+		ar(CEREAL_NVP(Machine), CEREAL_NVP(NumberOfSections), CEREAL_NVP(TimeDateStamp), CEREAL_NVP(PointerToSymbolTable), CEREAL_NVP(NumberOfSymbols), CEREAL_NVP(SizeOfOptionalHeader), CEREAL_NVP(Characteristics));
+	}
 } COFF_Header;
 
 typedef enum _MachineTypes
