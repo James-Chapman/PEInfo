@@ -30,3 +30,5 @@
 *.exe
 *.out
 *.app
+/PEInfo/PEInfo.vcxproj.user
+/PEInfo/PEInfo.vcxproj.filters
