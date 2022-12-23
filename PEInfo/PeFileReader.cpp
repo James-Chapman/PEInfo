@@ -6,7 +6,6 @@
 
 #include "PeFileReader.h"
 
-#include <array>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -21,17 +20,104 @@
 #pragma comment(lib, "Crypt32.lib")
 #pragma comment(lib, "ImageHlp.lib")
 
+namespace
+{
+using namespace uplinkzero;
+
+constexpr auto FieldBufferSize = 0x100; // 256
+
+bool VerifySignature(PCCERT_CONTEXT& certContextPtr, WIN_CERTIFICATE* certificatePtr, DWORD index)
+{
+    DWORD decodeSize{0};
+    CRYPT_VERIFY_MESSAGE_PARA para{0};
+    para.cbSize = sizeof(para);
+    para.dwMsgAndCertEncodingType = X509_ASN_ENCODING | PKCS_7_ASN_ENCODING;
+
+    if (!::CryptVerifyMessageSignature(&para, index, certificatePtr->bCertificate, certificatePtr->dwLength, NULL,
+                                       &decodeSize, &certContextPtr))
+    {
+        std::wcerr << L"CryptVerifyMessageSignature error: " << GetLastError() << L"\n";
+        return false;
+    }
+    return true;
+}
+
+bool GetCertSubjectName(PCCERT_CONTEXT certContextPtr, Certificate_Data& certData)
+{
+    DWORD subjectNameSize = ::CertGetNameStringW(certContextPtr, CERT_NAME_SIMPLE_DISPLAY_TYPE, 0, NULL, NULL, 0);
+    if (subjectNameSize <= 0)
+    {
+        std::wcerr << L"CertGetNameStringW error: " << GetLastError() << L"\n";
+        return false;
+    }
+
+    std::vector<wchar_t> buf(subjectNameSize);
+
+    ::CertGetNameStringW(certContextPtr, CERT_NAME_SIMPLE_DISPLAY_TYPE, 0, NULL, buf.data(), subjectNameSize);
+    certData.SubjectName = std::wstring(buf.begin(), buf.end());
+    return true;
+}
+
+bool GetCertIssuerName(PCCERT_CONTEXT certContextPtr, Certificate_Data& certData)
+{
+    DWORD issuerNameSize =
+        ::CertGetNameStringW(certContextPtr, CERT_NAME_SIMPLE_DISPLAY_TYPE, CERT_NAME_ISSUER_FLAG, NULL, NULL, 0);
+    if (issuerNameSize <= 0)
+    {
+        std::wcerr << L"CertGetNameStringW error: " << GetLastError() << L"\n";
+        return {};
+    }
+    std::vector<wchar_t> buf(issuerNameSize);
+
+    ::CertGetNameStringW(certContextPtr, CERT_NAME_SIMPLE_DISPLAY_TYPE, CERT_NAME_ISSUER_FLAG, NULL, buf.data(),
+                         issuerNameSize);
+    certData.IssuerName = std::wstring(buf.begin(), buf.end());
+    return true;
+}
+
+bool GetCertSerialNumber(PCCERT_CONTEXT certContextPtr, Certificate_Data& certData)
+{
+    DWORD serialNumberDataSize = certContextPtr->pCertInfo->SerialNumber.cbData;
+    std::wstringstream serialss;
+    serialss << std::hex;
+    for (DWORD i = 0; i < serialNumberDataSize; ++i)
+    {
+        serialss << std::setw(2) << std::setfill(L'0')
+                 << static_cast<int>(certContextPtr->pCertInfo->SerialNumber.pbData[serialNumberDataSize - (i + 1)]);
+    }
+    certData.SerialNumber = serialss.str();
+    return true;
+}
+
+bool GetCertSubjectKeyIdentifier(PCCERT_CONTEXT certContextPtr, Certificate_Data& certData)
+{
+    DWORD subjKeyIdDataSize{64};
+    BYTE data[64];
+    ::CertGetCertificateContextProperty(certContextPtr, CERT_KEY_IDENTIFIER_PROP_ID, &data, &subjKeyIdDataSize);
+    std::wstringstream skiss;
+    skiss << std::hex;
+    for (DWORD i = 0; i < subjKeyIdDataSize; ++i)
+    {
+        skiss << std::setw(2) << std::setfill(L'0') << (int)data[i];
+    }
+    certData.SubjectKeyIdentifier = skiss.str();
+    return true;
+}
+
+} // namespace
+
 namespace uplinkzero
 {
 
+constexpr auto PESignatureSize{0x4};
 constexpr auto PESignatureLocationOffset{0x3c};
 constexpr auto PEOptionalHeaderLocationOffset{0x14}; // 20 bytes
-DWORD PESignatureLocation{0x0};                      // Gets set later
-DWORD PEOptionalHeaderLocation{0x0};                 // Gets set later
+DWORD PESignatureLocation{0x0};                      // Set during call to IsPeFile
+DWORD PEOptionalHeaderLocation{0x0};                 // Set during call to IsPeFile
 
 PeFileReader::PeFileReader(std::wstring filePath) : m_filePath{filePath}, m_fileHandle{nullptr}
 {
-    m_fileHandle = ::CreateFile(reinterpret_cast<LPCSTR>(m_filePath.c_str()), FILE_READ_DATA, FILE_SHARE_READ, NULL,
+    m_fileHandle = ::CreateFileW(m_filePath.c_str(), FILE_READ_DATA, FILE_SHARE_READ, NULL,
                                 OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_RANDOM_ACCESS, NULL);
 }
 
@@ -42,31 +128,46 @@ PeFileReader::~PeFileReader()
 
 bool PeFileReader::IsPeFile()
 {
-    BYTE dosHeader[2];
     ::SetFilePointer(m_fileHandle, 0, NULL, FILE_BEGIN);
-    ::ReadFile(m_fileHandle, dosHeader, 2, NULL, NULL);
-    if (dosHeader[0] != 0x4d || // M
-        dosHeader[1] != 0x5a)   // Z
+
+    // First check DOS header
+    BYTE dosSignature[2];
+    if (!::ReadFile(m_fileHandle, dosSignature, 2, NULL, NULL))
+    {
+        return false;
+    }
+    if (dosSignature[0] != 0x4d || // M
+        dosSignature[1] != 0x5a)   // Z
     {
         return false;
     }
 
+    // Find PE header location
     ::SetFilePointer(m_fileHandle, PESignatureLocationOffset, NULL, FILE_BEGIN);
-    ::ReadFile(m_fileHandle, &PESignatureLocation, 2, NULL, NULL);
-
-    BYTE peHeader[4];
-    ::SetFilePointer(m_fileHandle, PESignatureLocation, NULL, FILE_BEGIN);
-    ::ReadFile(m_fileHandle, peHeader, 4, NULL, NULL);
-
-    if (peHeader[0] != 0x50 || // P
-        peHeader[1] != 0x45 || // E
-        peHeader[2] != 0x0 ||  // 0
-        peHeader[3] != 0x0)    // 0
+    if (!::ReadFile(m_fileHandle, &PESignatureLocation, 2, NULL, NULL))
     {
         return false;
     }
 
-    PEOptionalHeaderLocation = PESignatureLocation + PEOptionalHeaderLocationOffset;
+    ::SetFilePointer(m_fileHandle, PESignatureLocation, NULL, FILE_BEGIN);
+
+    // Check PE header
+    BYTE peSignature[PESignatureSize];
+    if (!::ReadFile(m_fileHandle, peSignature, PESignatureSize, NULL, NULL))
+    {
+        return false;
+    }
+
+    if (peSignature[0] != 0x50 || // P
+        peSignature[1] != 0x45 || // E
+        peSignature[2] != 0x0 ||  // 0
+        peSignature[3] != 0x0)    // 0
+    {
+        return false;
+    }
+
+    // We have a valid DOS header and PE header - This is probably a PE file
+    PEOptionalHeaderLocation = PESignatureLocation + PESignatureSize + PEOptionalHeaderLocationOffset;
     return true;
 }
 
@@ -77,8 +178,8 @@ COFF_Header PeFileReader::GetCoffHeader()
         throw std::runtime_error("Not a PE file.");
     }
 
-    COFF_Header coff;
-    ::SetFilePointer(m_fileHandle, PESignatureLocation, NULL, FILE_BEGIN);
+    COFF_Header coff{};
+    ::SetFilePointer(m_fileHandle, PESignatureLocation + 4, NULL, FILE_BEGIN);
     ::ReadFile(m_fileHandle, &coff.Machine, 2, NULL, NULL);
     ::ReadFile(m_fileHandle, &coff.NumberOfSections, 2, NULL, NULL);
     ::ReadFile(m_fileHandle, &coff.TimeDateStamp, 4, NULL, NULL);
@@ -111,7 +212,7 @@ Optional_Header PeFileReader::GetOptionalHeader()
         throw std::runtime_error("Not a PE file.");
     }
 
-    Optional_Header optHdr;
+    Optional_Header optHdr{};
     ::SetFilePointer(m_fileHandle, PEOptionalHeaderLocation, NULL, FILE_BEGIN);
     {
         // Update Optional Header Standard Fields (Image Only)
@@ -218,15 +319,13 @@ Optional_Header PeFileReader::GetOptionalHeader()
 std::vector<Certificate_Data> PeFileReader::GetSignCerts()
 {
     std::vector<Certificate_Data> retval{};
+    DWORD dwCertCount{0};
 
-    DWORD dwCertCount = 0;
-
-    { // Enumerate all the embedded certificates
-        if (!::ImageEnumerateCertificates(m_fileHandle, CERT_SECTION_TYPE_ANY, &dwCertCount, NULL, 0))
-        {
-            std::cout << "ImageEnumerateCertificates error: " << GetLastError() << std::endl;
-            return {};
-        }
+    // Enumerate all the embedded certificates
+    if (!::ImageEnumerateCertificates(m_fileHandle, CERT_SECTION_TYPE_ANY, &dwCertCount, NULL, 0))
+    {
+        std::wcerr << L"ImageEnumerateCertificates error: " << GetLastError() << L"\n";
+        return {};
     }
 
     for (DWORD i = 0; i < dwCertCount; ++i)
@@ -236,106 +335,64 @@ std::vector<Certificate_Data> PeFileReader::GetSignCerts()
     return retval;
 }
 
-Certificate_Data PeFileReader::GetCertAtIndex(DWORD i)
+Certificate_Data PeFileReader::GetCertAtIndex(DWORD index)
 {
     Certificate_Data certData{};
-    char* pCertBuf{nullptr};
-    PCCERT_CONTEXT pCertContext{nullptr};
-    WIN_CERTIFICATE certHeader;
-    WIN_CERTIFICATE* pCert{nullptr};
-    PCMSG_SIGNER_INFO pSignerInfo{nullptr};
-    PCMSG_SIGNER_INFO pCounterSignerInfo{nullptr};
+    WIN_CERTIFICATE certHeader{};
+    WIN_CERTIFICATE* certBufferPtr{nullptr};
 
     certHeader.dwLength = 0;
     certHeader.wRevision = WIN_CERT_REVISION_1_0;
-    if (!::ImageGetCertificateHeader(m_fileHandle, i, &certHeader))
+    if (!::ImageGetCertificateHeader(m_fileHandle, index, &certHeader))
     {
-        std::cout << "ImageGetCertificateHeader error: " << GetLastError() << std::endl;
+        std::wcerr << L"ImageGetCertificateHeader error: " << GetLastError() << L"\n";
         return {};
     }
 
-    DWORD dwCertLen = certHeader.dwLength;
-    pCertBuf = new char[sizeof(WIN_CERTIFICATE) + dwCertLen];
-    pCert = (WIN_CERTIFICATE*)pCertBuf;
-    pCert->dwLength = dwCertLen;
-    pCert->wRevision = WIN_CERT_REVISION_1_0;
-    if (!::ImageGetCertificateData(m_fileHandle, i, pCert, &dwCertLen))
+    DWORD dwCertLen{certHeader.dwLength};
+    std::vector<uint8_t> certBuffer(sizeof(WIN_CERTIFICATE) + dwCertLen);
+    // certBuffer.reserve(sizeof(WIN_CERTIFICATE) + dwCertLen);
+
+    certBufferPtr = reinterpret_cast<WIN_CERTIFICATE*>(certBuffer.data());
+    certBufferPtr->dwLength = {dwCertLen};
+    certBufferPtr->wRevision = WIN_CERT_REVISION_1_0;
+
+    if (!::ImageGetCertificateData(m_fileHandle, index, certBufferPtr, &dwCertLen))
     {
-        std::cout << "ImageGetCertificateData error: " << GetLastError() << std::endl;
+        std::wcerr << L"ImageGetCertificateData error: " << GetLastError() << L"\n";
         return {};
     }
 
-    { // Verify signature
-        DWORD dwDecodeSize = 0;
-        CRYPT_VERIFY_MESSAGE_PARA para = {0};
-        para.cbSize = sizeof(para);
-        para.dwMsgAndCertEncodingType = X509_ASN_ENCODING | PKCS_7_ASN_ENCODING;
+    PCCERT_CONTEXT certContextPtr{nullptr};
 
-        if (!::CryptVerifyMessageSignature(&para, i, pCert->bCertificate, pCert->dwLength, NULL, &dwDecodeSize,
-                                           &pCertContext))
-        {
-            std::cout << "CryptVerifyMessageSignature error: " << GetLastError() << std::endl;
-            return {};
-        }
-    }
-
-    { // Get certificate Subject Name
-        DWORD dwSubjectSize = ::CertGetNameStringW(pCertContext, CERT_NAME_SIMPLE_DISPLAY_TYPE, 0, NULL, NULL, 0);
-        if (dwSubjectSize <= 0)
-        {
-            std::cout << "CertGetNameStringW error: " << GetLastError() << std::endl;
-            return {};
-        }
-
-        std::array<wchar_t, 256> buf{0x0};
-
-        ::CertGetNameStringW(pCertContext, CERT_NAME_SIMPLE_DISPLAY_TYPE, 0, NULL, buf.data(), dwSubjectSize);
-        certData.SubjectName = std::wstring(buf.begin(), buf.end());
-    }
-
-    { // Get certificate Issuer Name
-        DWORD dwIssuerSize =
-            ::CertGetNameStringW(pCertContext, CERT_NAME_SIMPLE_DISPLAY_TYPE, CERT_NAME_ISSUER_FLAG, NULL, NULL, 0);
-        if (dwIssuerSize <= 0)
-        {
-            std::cout << "CertGetNameStringW error: " << GetLastError() << std::endl;
-            return {};
-        }
-        std::array<wchar_t, 256> buf{0x0};
-
-        ::CertGetNameStringW(pCertContext, CERT_NAME_SIMPLE_DISPLAY_TYPE, CERT_NAME_ISSUER_FLAG, NULL, buf.data(),
-                             dwIssuerSize);
-        certData.IssuerName = std::wstring(buf.begin(), buf.end());
-    }
-
-    { // Get certificate serial number
-        DWORD dwData = pCertContext->pCertInfo->SerialNumber.cbData;
-        std::wstringstream serialss;
-        serialss << std::hex;
-        for (DWORD j = 0; j < dwData; ++j)
-        {
-            serialss << std::setw(2) << std::setfill(L'0')
-                     << static_cast<int>(pCertContext->pCertInfo->SerialNumber.pbData[dwData - (j + 1)]);
-        }
-        certData.SerialNumber = serialss.str();
-    }
-
-    { // Get certificate Subject Key Identifierta
-        DWORD dwData{64};
-        BYTE data[64];
-        ::CertGetCertificateContextProperty(pCertContext, CERT_KEY_IDENTIFIER_PROP_ID, &data, &dwData);
-        std::wstringstream skiss;
-        skiss << std::hex;
-        for (DWORD j = 0; j < dwData; ++j)
-        {
-            skiss << std::setw(2) << std::setfill(L'0') << (int)data[j];
-        }
-        certData.SubjectKeyIdentifier = skiss.str();
-    }
-
-    if (pCertContext)
+    if (!VerifySignature(certContextPtr, certBufferPtr, index))
     {
-        CertFreeCertificateContext(pCertContext);
+        std::wcerr << L"VerifySignature failed.\n";
+    }
+
+    if (!GetCertSubjectName(certContextPtr, certData))
+    {
+        std::wcerr << L"GetCertSubjectName failed.\n";
+    }
+
+    if (!GetCertIssuerName(certContextPtr, certData))
+    {
+        std::wcerr << L"GetCertIssuerName failed.\n";
+    }
+
+    if (!GetCertSerialNumber(certContextPtr, certData))
+    {
+        std::wcerr << L"GetCertSerialNumber failed.\n";
+    }
+
+    if (!GetCertSubjectKeyIdentifier(certContextPtr, certData))
+    {
+        std::wcerr << L"GetCertSubjectKeyIdentifier failed.\n";
+    }
+
+    if (certContextPtr)
+    {
+        CertFreeCertificateContext(certContextPtr);
     }
 
     return certData;

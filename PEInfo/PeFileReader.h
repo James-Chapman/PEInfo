@@ -10,8 +10,6 @@
 
 #include <memory>
 
-#define ENCODING (X509_ASN_ENCODING | PKCS_7_ASN_ENCODING)
-
 namespace uplinkzero
 {
 
@@ -29,7 +27,7 @@ public:
 
 private:
     Certificate_Data GetCertAtIndex(DWORD i);
-    std::wstring m_filePath;
+    std::wstring m_filePath{};
     HANDLE m_fileHandle{};
 };
 
