@@ -27,8 +27,9 @@ int wmain(int argc, wchar_t* argv[])
     {
         ++fileCount;
         wchar_t* fileName = argv[i];
-        std::wcout << L"    \"PE file name\": \"" << fileName << L"\",\n";
-        std::wcout << L"    \"PE file data\": {\n";
+        std::wcout << L"    \"PE file\": {\n";
+        std::wcout << L"        \"File name\": \"" << fileName << L"\",\n";
+        std::wcout << L"        \"File data\": {\n";
         std::wstring wfileNameStr(argv[i]);
         PeFileReader fileReader(fileName);
         if (!fileReader.IsPeFile())
@@ -37,27 +38,26 @@ int wmain(int argc, wchar_t* argv[])
         }
 
         auto coff_hdr = fileReader.GetCoffHeader();
+        auto magicNum = fileReader.GetMagicNumber();
+        auto certs = fileReader.GetSignCerts();
+
         auto tm = std::chrono::system_clock::to_time_t(std::chrono::system_clock::time_point(
             std::chrono::duration_cast<std::chrono::seconds>(std::chrono::duration<DWORD>(coff_hdr.TimeDateStamp))));
 
-        std::wcout << L"        \"TimeDateStamp\": \"" << std::put_time(std::localtime(&tm), L"%Y-%m-%d %H:%M:%S %Z") << L"\",\n";
-        std::wcout << L"        \"Machine type\": " << std::hex << "0x" << coff_hdr.Machine << L",\n";
-
-        auto magicNum = fileReader.GetMagicNumber();
-        std::wcout << L"        \"Magic Number\": " << std::hex << "0x" << magicNum << L",\n";
-
-        auto certs = fileReader.GetSignCerts();
-        std::wcout << L"        \"Authenticode Signing Certificates\": [";
+        std::wcout << L"            \"TimeDateStamp\": \"" << std::put_time(std::localtime(&tm), L"%Y-%m-%d %H:%M:%S %Z") << L"\",\n";
+        std::wcout << L"            \"Machine type\": \"" << std::hex << "0x" << coff_hdr.Machine << L"\",\n";
+        std::wcout << L"            \"Magic Number\": \"" << std::hex << "0x" << magicNum << L"\",\n";
+        std::wcout << L"            \"Authenticode Signing Certificates\": [";
         size_t certCount = 0;
         for (const auto& cert : certs)
         {
             ++certCount;
             std::wcout << L"{\n";
-            std::wcout << L"            \"Subject Name\": \"" << cert.SubjectName.c_str() << L"\",\n";
-            std::wcout << L"            \"Issuer Name\": \"" << cert.IssuerName.c_str() << L"\",\n";
-            std::wcout << L"            \"Serial Number\": \"" << cert.SerialNumber << L"\",\n";
-            std::wcout << L"            \"Subject Key Identifier\": \"" << cert.SubjectKeyIdentifier << L"\"\n";
-            std::wcout << L"        }";
+            std::wcout << L"                \"Subject Name\": \"" << cert.SubjectName.c_str() << L"\",\n";
+            std::wcout << L"                \"Issuer Name\": \"" << cert.IssuerName.c_str() << L"\",\n";
+            std::wcout << L"                \"Serial Number\": \"" << cert.SerialNumber << L"\",\n";
+            std::wcout << L"                \"Subject Key Identifier\": \"" << cert.SubjectKeyIdentifier << L"\"\n";
+            std::wcout << L"            }";
             if (certCount != certs.size())
             {
                 std::wcout << L",\n";
@@ -65,6 +65,7 @@ int wmain(int argc, wchar_t* argv[])
         }
         std::wcout << L"]\n";
 
+        std::wcout << L"        }\n";
         std::wcout << L"    }";
         if (fileCount != argc)
         {
