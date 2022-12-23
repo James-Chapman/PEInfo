@@ -40,7 +40,7 @@ int wmain(int argc, wchar_t* argv[])
         auto tm = std::chrono::system_clock::to_time_t(std::chrono::system_clock::time_point(
             std::chrono::duration_cast<std::chrono::seconds>(std::chrono::duration<DWORD>(coff_hdr.TimeDateStamp))));
 
-        std::wcout << L"        \"TimeDateStamp\": \"" << std::put_time(std::localtime(&tm), L"%c %Z") << L"\",\n";
+        std::wcout << L"        \"TimeDateStamp\": \"" << std::put_time(std::localtime(&tm), L"%Y-%m-%d %H:%M:%S %Z") << L"\",\n";
         std::wcout << L"        \"Machine type\": " << std::hex << "0x" << coff_hdr.Machine << L",\n";
 
         auto magicNum = fileReader.GetMagicNumber();

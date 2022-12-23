@@ -8,14 +8,14 @@ Acrobat DC\Acrobat\Acrobat.exe" "C:\Program Files\Google\Chrome\Application\chro
 {
     "PE file name": "C:\Program Files\7-Zip\7z.exe",
     "PE file data": {
-        "TimeDateStamp": "08/08/20 20:00:00 GMT Summer Time",
+        "TimeDateStamp": "2020-08-08 20:00:00 GMT Summer Time",
         "Machine type": 0x8664,
         "Magic Number": 0x20b,
         "Authenticode Signing Certificates": []
     },
     "PE file name": "C:\Program Files\Adobe\Acrobat DC\Acrobat\Acrobat.exe",
     "PE file data": {
-        "TimeDateStamp": "11/14/22 18:38:45 GMT Standard Time",
+        "TimeDateStamp": "2022-11-14 18:38:45 GMT Standard Time",
         "Machine type": 0x8664,
         "Magic Number": 0x20b,
         "Authenticode Signing Certificates": [{
@@ -27,7 +27,7 @@ Acrobat DC\Acrobat\Acrobat.exe" "C:\Program Files\Google\Chrome\Application\chro
     },
     "PE file name": "C:\Program Files\Google\Chrome\Application\chrome.exe",
     "PE file data": {
-        "TimeDateStamp": "12/12/22 18:07:40 GMT Standard Time",
+        "TimeDateStamp": "2022-12-12 18:07:40 GMT Standard Time",
         "Machine type": 0x8664,
         "Magic Number": 0x20b,
         "Authenticode Signing Certificates": [{
