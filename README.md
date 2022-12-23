@@ -1,6 +1,14 @@
 # PEInfo
 
-Get information from PE files, including authenticode signing certificate data.
+## About 
+
+Threat researchers typically want all kinds of information from PE files to help write better detections. This tool is aimed at that community and allows you to extract information from PE files, including authenticode signing certificate data. Only a fraction of the information being extracted is printed to stdout. If I get a boost of inspiration in the future I'll add more data to the output.
+
+## Building
+
+This was written on Windows, for WIndows, to read Windows Portable Executable (PE) files. It uses Windows APIs. You'll therefore need the Windows SDK and MSVC compiler. Visual Studio 2022 solution file is provided. There are probably ways to make it build in Visual Studio Code and possibly even using Clang/LLVM compiler.
+
+## Usage
 
 ```Text
 C:\Users\User>PEInfo.exe "C:\Program Files\7-Zip\7z.exe" "C:\Program Files\Adobe\
