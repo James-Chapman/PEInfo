@@ -1,8 +1,8 @@
-// Copyright 2022 James Chapman
+// Copyright(c) 2019-2022, James Chapman
 //
 // Use of this source code is governed by a BSD -
 // style license that can be found in the LICENSE file or
-// at https://developers.google.com/open-source/licenses/bsd
+// at https://choosealicense.com/licenses/bsd-3-clause/
 
 #pragma warning(disable : 4996)
 
@@ -13,8 +13,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
-#include <iostream>
 #include <iomanip>
+#include <iostream>
 #include <memory>
 
 using namespace uplinkzero;
@@ -42,7 +42,7 @@ int wmain(int argc, wchar_t* argv[])
 
         std::wcout << L"        \"TimeDateStamp\": \"" << std::put_time(std::localtime(&tm), L"%c %Z") << L"\",\n";
         std::wcout << L"        \"Machine type\": " << std::hex << "0x" << coff_hdr.Machine << L",\n";
-        
+
         auto magicNum = fileReader.GetMagicNumber();
         std::wcout << L"        \"Magic Number\": " << std::hex << "0x" << magicNum << L",\n";
 

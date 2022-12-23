@@ -1,17 +1,16 @@
-// Copyright 2022 James Chapman
+// Copyright(c) 2019-2022, James Chapman
 //
 // Use of this source code is governed by a BSD -
 // style license that can be found in the LICENSE file or
-// at https://developers.google.com/open-source/licenses/bsd
+// at https://choosealicense.com/licenses/bsd-3-clause/
 
 #pragma once
 
 #include "CommonDefs.h"
 
+#include <Windows.h>
 #include <string>
 #include <vector>
-
-#include <Windows.h>
 
 namespace uplinkzero
 {
@@ -117,4 +116,4 @@ enum PEMagicNumber
     PE32plus = 0x20b
 };
 
-} // namespace
+} // namespace uplinkzero

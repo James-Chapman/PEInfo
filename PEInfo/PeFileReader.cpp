@@ -1,8 +1,8 @@
-// Copyright 2022 James Chapman
+// Copyright(c) 2019-2022, James Chapman
 //
 // Use of this source code is governed by a BSD -
 // style license that can be found in the LICENSE file or
-// at https://developers.google.com/open-source/licenses/bsd
+// at https://choosealicense.com/licenses/bsd-3-clause/
 
 #include "PeFileReader.h"
 
@@ -117,8 +117,8 @@ DWORD PEOptionalHeaderLocation{0x0};                 // Set during call to IsPeF
 
 PeFileReader::PeFileReader(std::wstring filePath) : m_filePath{filePath}, m_fileHandle{nullptr}
 {
-    m_fileHandle = ::CreateFileW(m_filePath.c_str(), FILE_READ_DATA, FILE_SHARE_READ, NULL,
-                                OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_RANDOM_ACCESS, NULL);
+    m_fileHandle = ::CreateFileW(m_filePath.c_str(), FILE_READ_DATA, FILE_SHARE_READ, NULL, OPEN_EXISTING,
+                                 FILE_ATTRIBUTE_NORMAL | FILE_FLAG_RANDOM_ACCESS, NULL);
 }
 
 PeFileReader::~PeFileReader()
