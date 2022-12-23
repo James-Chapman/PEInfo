@@ -27,20 +27,23 @@ int wmain(int argc, wchar_t* argv[])
     {
         ++fileCount;
         wchar_t* fileName = argv[i];
-        std::wcout << L"    \"PE file\": {\n";
-        std::wcout << L"        \"File name\": \"" << fileName << L"\",\n";
-        std::wcout << L"        \"File data\": {\n";
+
         std::wstring wfileNameStr(argv[i]);
         PeFileReader fileReader(fileName);
         if (!fileReader.IsPeFile())
         {
-            return 1;
+            continue;
         }
 
         auto coff_hdr = fileReader.GetCoffHeader();
         auto magicNum = fileReader.GetMagicNumber();
         auto certs = fileReader.GetSignCerts();
 
+        std::wcout << L"    \"PE file\": {\n";
+        std::wcout << L"        \"File name\": \"" << fileName << L"\",\n";
+        std::wcout << L"        \"File data\": {\n";
+
+        // coff_hdr.TimeDateStamp is just a DWORD with epoch time
         auto tm = std::chrono::system_clock::to_time_t(std::chrono::system_clock::time_point(
             std::chrono::duration_cast<std::chrono::seconds>(std::chrono::duration<DWORD>(coff_hdr.TimeDateStamp))));
 
