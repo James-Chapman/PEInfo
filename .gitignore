@@ -34,3 +34,7 @@
 /PEInfo/PEInfo.vcxproj.filters
 *.tlog
 .vs
+/obj
+/.vs
+/.vscode
+/bin
